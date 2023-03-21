@@ -12,6 +12,10 @@ const socketEndpoint = `wss://trade.${domain}/trade`;
 // Set the authorization header for all axios requests to the CSGOEmpire API Key
 axios.defaults.headers.common['Authorization'] = `Bearer ${csgoempireApiKey}`;
 
+async function getUserData() {
+    return (await axios.get(`https://${domain}/api/v2/metadata/socket`)).data;
+}
+
 // Function for connecting to the web socket
 async function initSocket() {
 
@@ -19,7 +23,7 @@ async function initSocket() {
 
     try {
         // Get the user data from the socket
-        const userData = (await axios.get(`https://${domain}/api/v2/metadata/socket`)).data;
+        const userData = await getUserData();
 
         // Initalize socket connection
         const socket = io(
@@ -29,7 +33,7 @@ async function initSocket() {
                 path: "/s/",
                 secure: true,
                 rejectUnauthorized: false,
-                reconnect: true,
+                reconnection: true,
                 extraHeaders: { 'User-agent': `${userData.user.id} API Bot` } //this lets the server know that this is a bot
             }
         );
@@ -50,6 +54,7 @@ async function initSocket() {
                     });
                     
                 } else {
+                    const userData = await getUserData();
                     // When the server asks for it, emit the data we got earlier to the socket to identify this client as the user
                     socket.emit('identify', {
                         uid: userData.user.id,
@@ -67,7 +72,13 @@ async function initSocket() {
             socket.on('auction_update', (data) => console.log(`auction_update: ${JSON.stringify(data)}`));
             socket.on('deleted_item', (data) => console.log(`deleted_item: ${JSON.stringify(data)}`));
             socket.on('trade_status', (data) => console.log(`trade_status: ${JSON.stringify(data)}`));
-            socket.on("disconnect", (reason) => console.log(`Socket disconnected: ${reason}`));
+            socket.on("disconnect", (reason) => {
+                console.log(`Socket disconnected: ${reason}`)
+                if (reason === 'io server disconnect') {
+                    // the disconnection was initiated by the server, you need to reconnect manually
+                    socket.connect();
+                }
+            });
         });
 
         // Listen for the following event to be emitted by the socket in error cases
